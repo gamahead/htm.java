@@ -23,6 +23,7 @@
 package org.numenta.nupic;
 
 import org.junit.Test;
+import org.numenta.nupic.Parameters.KEY;
 import org.numenta.nupic.util.MersenneTwister;
 
 import java.util.Arrays;
@@ -32,8 +33,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 public class ParametersTest {
-    @SuppressWarnings("unused")
-	private Parameters parameters;
+    private Parameters parameters;
 
     @Test
     public void testApply() {
@@ -86,6 +86,17 @@ public class ParametersTest {
         public void setPotentialPct(double potentialPct) {
             this.potentialPct = potentialPct;
         }
+    }
+    
+    @Test
+    public void testUnion() {
+        Parameters params = Parameters.getAllDefaultParameters();
+        Parameters arg = Parameters.getAllDefaultParameters();
+        arg.setParameterByKey(KEY.CELLS_PER_COLUMN, 5);
+        
+        assertTrue((int)params.getParameterByKey(KEY.CELLS_PER_COLUMN) != 5);
+        params.union(arg);
+        assertTrue((int)params.getParameterByKey(KEY.CELLS_PER_COLUMN) == 5);
     }
 
 

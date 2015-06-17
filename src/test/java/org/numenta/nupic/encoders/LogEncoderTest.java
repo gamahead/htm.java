@@ -62,7 +62,7 @@ public class LogEncoderTest {
 		assertEquals(le.getDescription().get(0).get(1), 0);
 		
 		// Verify we're getting the correct field types
-		FieldMetaType fieldType = le.getDecoderOutputFieldTypes().get(0);
+		FieldMetaType fieldType = le.getDecoderOutputFieldTypes().iterator().next();
 		assertTrue(fieldType.equals(FieldMetaType.FLOAT));
 		
 		// Verify the encoder ends up with the correct width
@@ -105,7 +105,6 @@ public class LogEncoderTest {
 		int[] output = le.encode(value);
 		
 		int[] expected = new int[45];
-		//Arrays.fill(expected, 0);
 		for (int i = 0; i < 5; i++) {
 			expected[i] = 1;
 		}

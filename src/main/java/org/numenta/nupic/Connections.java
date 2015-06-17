@@ -23,6 +23,7 @@
 package org.numenta.nupic;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -97,7 +98,7 @@ public class Connections {
      * of the topology of the inputs and columns, they are treated as being a
      * one dimensional array. Since a column is typically connected to only a
      * subset of the inputs, many of the entries in the matrix are 0. Therefore
-     * the potentialPool matrix is stored using the SparseBinaryMatrix
+     * the potentialPool matrix is stored using the SparseObjectMatrix
      * class, to reduce memory footprint and computation time of algorithms that
      * require iterating over the data structure.
      */
@@ -109,7 +110,7 @@ public class Connections {
     private double[] tieBreaker;
     /** 
      * Stores the number of connected synapses for each column. This is simply
-     * a sum of each row of 'self._connectedSynapses'. again, while this
+     * a sum of each row of 'connectedSynapses'. again, while this
      * information is readily available from 'connectedSynapses', it is
      * stored separately for efficiency purposes.
      */
@@ -117,7 +118,7 @@ public class Connections {
     /**
      * The inhibition radius determines the size of a column's local
      * neighborhood. of a column. A cortical column must overcome the overlap
-     * score of columns in his neighborhood in order to become actives. This
+     * score of columns in its neighborhood in order to become actives. This
      * radius is updated every learning round. It grows and shrinks with the
      * average number of connected synapses per column.
      */
@@ -131,13 +132,12 @@ public class Connections {
     private double[] minActiveDutyCycles;
     private double[] boostFactors;
     
-    
 	/////////////////////////////////////// Temporal Memory Vars ///////////////////////////////////////////
     
     protected Set<Cell> activeCells = new LinkedHashSet<Cell>();
     protected Set<Cell> winnerCells = new LinkedHashSet<Cell>();
     protected Set<Cell> predictiveCells = new LinkedHashSet<Cell>();
-    protected Set<Column> predictedColumns = new LinkedHashSet<Column>();
+    protected Set<Column> successfullyPredictedColumns = new LinkedHashSet<Column>();
     protected Set<DistalDendrite> activeSegments = new LinkedHashSet<DistalDendrite>();
     protected Set<DistalDendrite> learningSegments = new LinkedHashSet<DistalDendrite>();
     protected Map<DistalDendrite, Set<Synapse>> activeSynapsesForSegment = new LinkedHashMap<DistalDendrite, Set<Synapse>>();
@@ -228,7 +228,7 @@ public class Connections {
         activeCells.clear();
         winnerCells.clear();
         predictiveCells.clear();
-        predictedColumns.clear();
+        successfullyPredictedColumns.clear();
         activeSegments.clear();
         learningSegments.clear();
         activeSynapsesForSegment.clear();
@@ -365,6 +365,10 @@ public class Connections {
         return random;
     }
 
+    /**
+     * Sets the random number generator.
+     * @param random
+     */
     public void setRandom(Random random){
         this.random = random;
     }
@@ -424,6 +428,11 @@ public class Connections {
         return numInputs;
     }
     
+    /**
+     * Sets the product of the input dimensions to
+     * establish a flat count of bits in the input field.
+     * @param n
+     */
     public void setNumInputs(int n) {
     	this.numInputs = n;
     }
@@ -436,6 +445,11 @@ public class Connections {
         return numColumns;
     }
     
+    /**
+     * Sets the product of the column dimensions to be 
+     * the column count.
+     * @param n
+     */
     public void setNumColumns(int n) {
     	this.numColumns = n;
     }
@@ -856,7 +870,7 @@ public class Connections {
      * used if the duty cycle is >= minOverlapDutyCycle,
      * maxBoost is used if the duty cycle is 0, and any duty
      * cycle in between is linearly extrapolated from these
-     * 2 endpoints.
+     * 2 end points.
      * 
      * @param maxBoost
      */
@@ -927,7 +941,7 @@ public class Connections {
     }
     
     /**
-     * 
+     * Returns the minimum {@link Synapse} permanence.
      * @return
      */
     public double getSynPermMin() {
@@ -935,7 +949,7 @@ public class Connections {
     }
     
     /**
-     * 
+     * Returns the maximum {@link Synapse} permanence.
      * @return
      */
     public double getSynPermMax() {
@@ -1038,14 +1052,17 @@ public class Connections {
      * High verbose output useful for debugging
      */
     public void printParameters() {
-        System.out.println("------------J  SpatialPooler Parameters ------------------");
+        System.out.println("------------ SpatialPooler Parameters ------------------");
         System.out.println("numInputs                  = " + getNumInputs());
         System.out.println("numColumns                 = " + getNumColumns());
-        System.out.println("columnDimensions           = " + getColumnDimensions());
+        System.out.println("cellsPerColumn             = " + getCellsPerColumn());
+        System.out.println("columnDimensions           = " + Arrays.toString(getColumnDimensions()));
         System.out.println("numActiveColumnsPerInhArea = " + getNumActiveColumnsPerInhArea());
         System.out.println("potentialPct               = " + getPotentialPct());
+        System.out.println("potentialRadius            = " + getPotentialRadius());
         System.out.println("globalInhibition           = " + getGlobalInhibition());
         System.out.println("localAreaDensity           = " + getLocalAreaDensity());
+        System.out.println("inhibitionRadius           = " + getInhibitionRadius());
         System.out.println("stimulusThreshold          = " + getStimulusThreshold());
         System.out.println("synPermActiveInc           = " + getSynPermActiveInc());
         System.out.println("synPermInactiveDec         = " + getSynPermInactiveDec());
@@ -1056,6 +1073,16 @@ public class Connections {
         System.out.println("maxBoost                   = " + getMaxBoost());
         System.out.println("spVerbosity                = " + getSpVerbosity());
         System.out.println("version                    = " + getVersion());
+        
+        System.out.println("\n------------ TemporalMemory Parameters ------------------");
+        System.out.println("activationThreshold        = " + getActivationThreshold());
+        System.out.println("learningRadius             = " + getLearningRadius());
+        System.out.println("minThreshold               = " + getMinThreshold());
+        System.out.println("maxNewSynapseCount         = " + getMaxNewSynapseCount());
+        System.out.println("initialPermanence          = " + getInitialPermanence());
+        System.out.println("connectedPermanence        = " + getConnectedPermanence());
+        System.out.println("permanenceIncrement        = " + getPermanenceIncrement());
+        System.out.println("permanenceDecrement        = " + getPermanenceDecrement());
     }
     
     /////////////////////////////// Temporal Memory //////////////////////////////
@@ -1111,20 +1138,20 @@ public class Connections {
     }
     
     /**
-     * Returns the current {@link Set} of predicted columns
+     * Returns the {@link Set} of columns successfully predicted from t - 1.
      * 
      * @return  the current {@link Set} of predicted columns
      */
-    public Set<Column> getPredictedColumns() {
-        return predictedColumns;
+    public Set<Column> getSuccessfullyPredictedColumns() {
+        return successfullyPredictedColumns;
     }
     
     /**
-     * Sets the {@link Set} of predictedColumns
+     * Sets the {@link Set} of columns successfully predicted from t - 1.
      * @param columns
      */
-    public void setPredictedColumns(Set<Column> columns) {
-    	this.predictedColumns = columns;
+    public void setSuccessfullyPredictedColumns(Set<Column> columns) {
+    	this.successfullyPredictedColumns = columns;
     }
     
     /**
@@ -1378,7 +1405,7 @@ public class Connections {
     /**
      * If the number of synapses active on a segment is at least this
      * threshold, it is selected as the best matching
-     * cell in a bursing column.
+     * cell in a bursting column.
      * 
      * @param   minThreshold
      */
@@ -1405,7 +1432,7 @@ public class Connections {
     
     /**
      * Returns the maximum number of synapses added to a segment during
-     * learing.
+     * learning.
      * 
      * @return
      */
@@ -1499,7 +1526,7 @@ public class Connections {
      * @param cells
      * @return
      */
-    public List<Integer> asCellIndexes(Collection<Cell> cells) {
+    public static List<Integer> asCellIndexes(Collection<Cell> cells) {
         List<Integer> ints = new ArrayList<Integer>();
         for(Cell cell : cells) {
             ints.add(cell.getIndex());
@@ -1515,7 +1542,7 @@ public class Connections {
      * @param columns
      * @return
      */
-    public List<Integer> asColumnIndexes(Collection<Column> columns) {
+    public static List<Integer> asColumnIndexes(Collection<Column> columns) {
         List<Integer> ints = new ArrayList<Integer>();
         for(Column col : columns) {
             ints.add(col.getIndex());

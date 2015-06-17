@@ -23,25 +23,63 @@
 package org.numenta.nupic.util;
 
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
 
 /**
- * Testing to see if this is more meaningful than a generic 
- * native java data structure for encoder work.
- * @author metaware
- *
+ * An immutable fixed data structure whose values are retrieved
+ * via a given index. This data structure emulates multiple method
+ * return values possible in Python.
+ * 
+ * @author David Ray
  */
 public class Tuple {
-	private Object[] container;
+    /** The internal container array */
+	protected Object[] container;
 	
-	public Tuple(int size, Object... objects) {
-		container = new Object[size];
-		for(int i = 0;i < size;i++) container[i] = objects[i];
+	private int hashcode;
+	
+	/**
+	 * Instantiates a new {@code Tuple}
+	 * @param objects
+	 */
+	public Tuple(Object... objects) {
+		container = new Object[objects.length];
+		for(int i = 0;i < objects.length;i++) container[i] = objects[i];
+		this.hashcode = hashCode();
 	}
 	
+	/**
+	 * Returns the object previously inserted into the
+	 * specified index.
+	 * 
+	 * @param index    the index representing the insertion order.
+	 * @return
+	 */
 	public Object get(int index) {
 		return container[index];
 	}
 	
+	/**
+	 * Returns the number of items in this {@code Tuple}
+	 * 
+	 * @return
+	 */
+	public int size() {
+	    return container.length;
+	}
+	
+	/**
+	 * Returns an <em>unmodifiable</em> view of the underlying data.
+	 * @return
+	 */
+	public  List<Object> all() {
+	    return Collections.unmodifiableList(Arrays.asList(container));
+	}
+	
+	/**
+	 * {@inheritDoc}
+	 */
 	@Override
 	public String toString() {
 		StringBuilder sb = new StringBuilder();
@@ -57,6 +95,9 @@ public class Tuple {
 		return sb.toString();
 	}
 	
+	/**
+     * {@inheritDoc}
+     */
 	@Override
 	public int hashCode() {
 		final int prime = 31;
@@ -65,6 +106,9 @@ public class Tuple {
 		return result;
 	}
 
+	/**
+     * {@inheritDoc}
+     */
 	@Override
 	public boolean equals(Object obj) {
 		if (this == obj)
@@ -74,7 +118,7 @@ public class Tuple {
 		if (getClass() != obj.getClass())
 			return false;
 		Tuple other = (Tuple) obj;
-		if (!Arrays.equals(container, other.container))
+		if (this.hashcode != other.hashcode)
 			return false;
 		return true;
 	}

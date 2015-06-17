@@ -2,8 +2,10 @@
 /build
 /doc
 .idea/
+*.iml
 .gradle
 .settings
 .classpath
 /target
 /.classpath
+htm.java.iml

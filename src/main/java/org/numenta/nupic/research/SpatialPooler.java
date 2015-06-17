@@ -51,7 +51,7 @@ import java.util.Random;
  * > Connections c = new Connections();
  * > sp.init(c);
  * > for line in file:
- * >   inputVector = numpy.array(line)
+ * >   inputVector = prepared int[] (containing 1's and 0's)
  * >   sp.compute(inputVector)
  * 
  * @author David Ray
@@ -92,9 +92,12 @@ public class SpatialPooler {
         int numColumns = c.getMemory().getMaxIndex() + 1;
         c.setNumInputs(numInputs);
         c.setNumColumns(numColumns);
+        
         //Fill the sparse matrix with column objects
         for(int i = 0;i < numColumns;i++) { mem.set(i, new Column(c.getCellsPerColumn(), i)); }
+        
         c.setPotentialPools(new SparseObjectMatrix<Pool>(c.getMemory().getDimensions()));
+        
         c.setConnectedMatrix(new SparseBinaryMatrix(new int[] { numColumns, numInputs }));
         
         double[] tieBreaker = new double[numColumns];
@@ -105,13 +108,9 @@ public class SpatialPooler {
         
         //Initialize state meta-management statistics
         c.setOverlapDutyCycles(new double[numColumns]);
-        Arrays.fill(c.getOverlapDutyCycles(), 0);
         c.setActiveDutyCycles(new double[numColumns]);
-        Arrays.fill(c.getActiveDutyCycles(), 0);
         c.setMinOverlapDutyCycles(new double[numColumns]);
-        Arrays.fill(c.getOverlapDutyCycles(), 0);
         c.setMinActiveDutyCycles(new double[numColumns]);
-        Arrays.fill(c.getMinActiveDutyCycles(), 0);
         c.setBoostFactors(new double[numColumns]);
         Arrays.fill(c.getBoostFactors(), 1);
     }
@@ -120,6 +119,9 @@ public class SpatialPooler {
      * Step two of pooler initialization kept separate from initialization
      * of static members so that they may be set at a different point in 
      * the initialization (as sometimes needed by tests).
+     * 
+     * This step prepares the proximal dendritic synapse pools with their 
+     * initial permanence values and connected inputs.
      * 
      * @param c		the {@link Connections} memory
      */
@@ -166,7 +168,9 @@ public class SpatialPooler {
      */
     public void compute(Connections c, int[] inputVector, int[] activeArray, boolean learn, boolean stripNeverLearned) {
         if(inputVector.length != c.getNumInputs()) {
-            throw new IllegalArgumentException("Input array must be same size as the defined number of inputs");
+            throw new IllegalArgumentException(
+                "Input array must be same size as the defined number of inputs: From Params: " + c.getNumInputs() +
+                    ", From Input Vector: " + inputVector.length);
         }
         
         updateBookeepingVars(c, learn);
@@ -281,7 +285,7 @@ public class SpatialPooler {
     
     /**
      * Updates the duty cycles for each column. The OVERLAP duty cycle is a moving
-     * average of the number of inputs which overlapped with the each column. The
+     * average of the number of inputs which overlapped with each column. The
      * ACTIVITY duty cycles is a moving average of the frequency of activation for
      * each column.
      * 
@@ -426,10 +430,8 @@ public class SpatialPooler {
      *              			survived inhibition.
      */
     public void adaptSynapses(Connections c, int[] inputVector, int[] activeColumns) {
-    	int[] inputIndices = ArrayUtils.where(inputVector, new Condition.Adapter<Object>() {
-            @Override
-    		public boolean eval(int i) { return i > 0; }
-    	});
+    	int[] inputIndices = ArrayUtils.where(inputVector, ArrayUtils.INT_GREATER_THAN_0);
+    	
     	double[] permChanges = new double[c.getNumInputs()];
     	Arrays.fill(permChanges, -1 * c.getSynPermInactiveDec());
     	ArrayUtils.setIndexesTo(permChanges, inputIndices, c.getSynPermActiveInc());
@@ -471,13 +473,15 @@ public class SpatialPooler {
     /**
      * This method ensures that each column has enough connections to input bits
      * to allow it to become active. Since a column must have at least
-     * 'self._stimulusThreshold' overlaps in order to be considered during the
+     * 'stimulusThreshold' overlaps in order to be considered during the
      * inhibition phase, columns without such minimal number of connections, even
      * if all the input bits they are connected to turn on, have no chance of
      * obtaining the minimum threshold. For such columns, the permanence values
      * are increased until the minimum number of connections are formed.
      * 
-     * @param perm
+     * @param c					the {@link Connections} memory
+     * @param perm				the permanence values
+     * @param maskPotential			
      */
     public void raisePermanenceToThreshold(Connections c, double[] perm, int[] maskPotential) {
         ArrayUtils.clip(perm, c.getSynPermMin(), c.getSynPermMax());
@@ -493,7 +497,7 @@ public class SpatialPooler {
     /**
      * This method ensures that each column has enough connections to input bits
      * to allow it to become active. Since a column must have at least
-     * 'self._stimulusThreshold' overlaps in order to be considered during the
+     * 'stimulusThreshold' overlaps in order to be considered during the
      * inhibition phase, columns without such minimal number of connections, even
      * if all the input bits they are connected to turn on, have no chance of
      * obtaining the minimum threshold. For such columns, the permanence values
@@ -501,7 +505,8 @@ public class SpatialPooler {
      * 
      * Note: This method services the "sparse" versions of corresponding methods
      * 
-     * @param perm
+     * @param c         The {@link Connections} memory
+     * @param perm		permanence values
      */
     public void raisePermanenceToThresholdSparse(Connections c, double[] perm) {
         ArrayUtils.clip(perm, c.getSynPermMin(), c.getSynPermMax());
@@ -572,7 +577,7 @@ public class SpatialPooler {
     }
     
     /**
-     * Returns a randomly generated permanence value for a synapses that is
+     * Returns a randomly generated permanence value for a synapse that is
      * initialized in a connected state. The basic idea here is to initialize
      * permanence values very close to synPermConnected so that a small number of
      * learning steps could make it disconnected or connected.
@@ -636,7 +641,6 @@ public class SpatialPooler {
         }
         
         double[] perm = new double[c.getNumInputs()];
-        Arrays.fill(perm, 0);
         for(int idx : potentialPool) {
         	if(pick.contains(idx)) {
                 perm[idx] = initPermConnected(c);
@@ -688,7 +692,7 @@ public class SpatialPooler {
      * Maps a column to its input bits. This method encapsulates the topology of
      * the region. It takes the index of the column as an argument and determines
      * what are the indices of the input vector that are located within the
-     * column's potential pooc. The return value is a list containing the indices
+     * column's potential pool. The return value is a list containing the indices
      * of the input bits. The current implementation of the base class only
      * supports a 1 dimensional topology of columns with a 1 dimensional topology
      * of inputs. To extend this class to support 2-D topology you will need to
@@ -705,7 +709,7 @@ public class SpatialPooler {
      *   1-D index to 2-D position.
      * 
      * @param c	            {@link Connections} the main memory model
-     * @param columnIndex         The index identifying a column in the permanence, potential
+     * @param columnIndex   The index identifying a column in the permanence, potential
      *                      and connectivity matrices.
      * @param wrapAround    A boolean value indicating that boundaries should be
      *                      ignored.
@@ -753,6 +757,7 @@ public class SpatialPooler {
         final int[] dimensions = topology.getDimensions();
         int[] columnCoords = topology.computeCoordinates(columnIndex);
         List<int[]> dimensionCoords = new ArrayList<>();
+        
         for(int i = 0;i < dimensions.length;i++) {
             int[] range = ArrayUtils.range(columnCoords[i] - inhibitionRadius, columnCoords[i] + inhibitionRadius + 1);
             int[] curRange = new int[range.length];
@@ -764,10 +769,7 @@ public class SpatialPooler {
             }else{
                 final int idx = i;
                 curRange = ArrayUtils.retainLogicalAnd(range, 
-                    new Condition[] {
-                        new Condition.Adapter<Integer>() {
-                            @Override public boolean eval(int n) { return n >= 0; }
-                        },
+                    new Condition[] { ArrayUtils.GREATER_OR_EQUAL_0,
                         new Condition.Adapter<Integer>() {
                             @Override public boolean eval(int n) { return n < dimensions[idx]; }
                         }
@@ -874,6 +876,7 @@ public class SpatialPooler {
     	if(c.getGlobalInhibition() || c.getInhibitionRadius() > ArrayUtils.max(c.getColumnDimensions())) {
     		return inhibitColumnsGlobal(c, overlaps, density);
     	}
+    	
     	return inhibitColumnsLocal(c, overlaps, density);
     }
     
@@ -895,8 +898,6 @@ public class SpatialPooler {
     public int[] inhibitColumnsGlobal(Connections c, double[] overlaps, double density) {
     	int numCols = c.getNumColumns();
     	int numActive = (int)(density * numCols);
-    	int[] activeColumns = new int[numCols];
-    	Arrays.fill(activeColumns, 0);
     	int[] winners = ArrayUtils.nGreatest(overlaps, numActive);
     	Arrays.sort(winners);
     	return winners;
@@ -917,7 +918,6 @@ public class SpatialPooler {
     public int[] inhibitColumnsLocal(Connections c, double[] overlaps, double density) {
     	int numCols = c.getNumColumns();
     	int[] activeColumns = new int[numCols];
-    	Arrays.fill(activeColumns, 0);
     	double addToWinners = ArrayUtils.max(overlaps) / 1000.0;
     	for(int i = 0;i < numCols;i++) {
     		TIntArrayList maskNeighbors = getNeighborsND(c, i, c.getMemory(), c.getInhibitionRadius(), false);
@@ -929,11 +929,7 @@ public class SpatialPooler {
     			overlaps[i] += addToWinners;
     		}
     	}
-    	return ArrayUtils.where(activeColumns, new Condition.Adapter<Integer>() {
-    		@Override public boolean eval(int n) {
-				return n > 0;
-			}
-    	});
+    	return ArrayUtils.where(activeColumns, ArrayUtils.INT_GREATER_THAN_0);
     }
     
     /**
@@ -961,14 +957,12 @@ public class SpatialPooler {
      *         minActiveDutyCycle
      */
     public void updateBoostFactors(Connections c) {
-    	//Indexes of values > 0
-    	int[] mask = ArrayUtils.where(c.getMinActiveDutyCycles(), new Condition.Adapter<Object>() {
-    		@Override public boolean eval(double d) { return d > 0; }
-    	});
- 
-    	final double[] activeDutyCycles = c.getActiveDutyCycles();
-    	final double[] minActiveDutyCycles = c.getMinActiveDutyCycles();
+    	double[] activeDutyCycles = c.getActiveDutyCycles();
+    	double[] minActiveDutyCycles = c.getMinActiveDutyCycles();
     	
+    	//Indexes of values > 0
+    	int[] mask = ArrayUtils.where(minActiveDutyCycles, ArrayUtils.GREATER_THAN_0);
+ 
     	double[] boostInterim;
     	if(mask.length < 1) {
     		boostInterim = c.getBoostFactors();
@@ -978,7 +972,7 @@ public class SpatialPooler {
 	    	boostInterim = ArrayUtils.divide(numerator, minActiveDutyCycles, 0, 0);
 	    	boostInterim = ArrayUtils.multiply(boostInterim, activeDutyCycles, 0, 0);
 	    	boostInterim = ArrayUtils.d_add(boostInterim, c.getMaxBoost());
-    	}
+	    }
     	
     	ArrayUtils.setIndexesTo(boostInterim, ArrayUtils.where(activeDutyCycles, new Condition.Adapter<Object>() {
     		int i = 0;

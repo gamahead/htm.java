@@ -53,6 +53,15 @@ public class TemporalMemory {
      * Uses the specified {@link Connections} object to Build the structural 
      * anatomy needed by this {@code TemporalMemory} to implement its algorithms.
      * 
+     * The connections object holds the {@link Column} and {@link Cell} infrastructure,
+     * and is used by both the {@link SpatialPooler} and {@link TemporalMemory}. Either of
+     * these can be used separately, and therefore this Connections object may have its
+     * Columns and Cells initialized by either the init method of the SpatialPooler or the
+     * init method of the TemporalMemory. We check for this so that complete initialization
+     * of both Columns and Cells occurs, without either being redundant (initialized more than
+     * once). However, {@link Cell}s only get created when initializing a TemporalMemory, because
+     * they are not used by the SpatialPooler.
+     * 
      * @param	c		{@link Connections} object
      */
     public void init(Connections c) {
@@ -98,7 +107,7 @@ public class TemporalMemory {
         connections.setActiveCells(result.activeCells());
         connections.setWinnerCells(result.winnerCells());
         connections.setPredictiveCells(result.predictiveCells());
-        connections.setPredictedColumns(result.predictedColumns());
+        connections.setSuccessfullyPredictedColumns(result.successfullyPredictedColumns());
         connections.setActiveSegments(result.activeSegments());
         connections.setLearningSegments(result.learningSegments());
         connections.setActiveSynapsesForSegment(result.activeSynapsesForSegment());
@@ -126,7 +135,7 @@ public class TemporalMemory {
         
         activateCorrectlyPredictiveCells(cycle, prevPredictiveCells, activeColumns);
         
-        burstColumns(cycle, c, activeColumns, cycle.predictedColumns, prevActiveSynapsesForSegment);
+        burstColumns(cycle, c, activeColumns, cycle.successfullyPredictedColumns, prevActiveSynapsesForSegment);
         
         if(learn) {
             learnOnSegments(c, prevActiveSegments, cycle.learningSegments, prevActiveSynapsesForSegment, cycle.winnerCells, prevWinnerCells);
@@ -144,7 +153,7 @@ public class TemporalMemory {
      * 
      * Pseudocode:
      *
-     * - for each prev predictive cell
+     * - for each previous predictive cell
      *   - if in active column
      *     - mark it as active
      *     - mark it as winner cell
@@ -160,7 +169,7 @@ public class TemporalMemory {
             if(activeColumns.contains(column)) {
                 c.activeCells.add(cell);
                 c.winnerCells.add(cell);
-                c.predictedColumns.add(column);
+                c.successfullyPredictedColumns.add(column);
             }
         }
     }
@@ -175,7 +184,7 @@ public class TemporalMemory {
      *   - mark the best matching cell as winner cell
      *     - (learning)
      *       - if it has no matching segment
-     *         - (optimization) if there are prev winner cells
+     *         - (optimization) if there are previous winner cells
      *           - add a segment to it
      *       - mark the segment as learning
      * 
@@ -183,16 +192,14 @@ public class TemporalMemory {
      * @param c                             Connections temporal memory state
      * @param activeColumns                 active columns in t
      * @param predictedColumns              predicted columns in t
-     * @param prevActiveSynapsesForSegment      LinkedHashMap of previously active segments which
+     * @param prevActiveSynapsesForSegment  LinkedHashMap of previously active segments which
      *                                      have had synapses marked as active in t-1     
      */
     public void burstColumns(ComputeCycle cycle, Connections c, Set<Column> activeColumns, Set<Column> predictedColumns, 
         Map<DistalDendrite, Set<Synapse>> prevActiveSynapsesForSegment) {
         
-        Set<Column> unpred = new LinkedHashSet<Column>(activeColumns);
-        
-        unpred.removeAll(predictedColumns);
-        for(Column column : unpred) {
+    	activeColumns.removeAll(predictedColumns);
+        for(Column column : activeColumns) {
             List<Cell> cells = column.getCells();
             cycle.activeCells.addAll(cells);
             
@@ -218,13 +225,13 @@ public class TemporalMemory {
      * <pre>
      * Pseudocode:
      *
-     * - (learning) for each prev active or learning segment
+     * - (learning) for each previously active or learning segment
      *   - if learning segment or from winner cell
-     *   - strengthen active synapses
-     *   - weaken inactive synapses
+     *     - strengthen active synapses
+     *     - weaken inactive synapses
      *   - if learning segment
-     *   - add some synapses to the segment
-     *     - subsample from prev winner cells
+     *     - add some synapses to the segment
+     *     - sub sample from previous winner cells
      * </pre>    
      *     
      * @param c                             the Connections state of the temporal memory
@@ -247,15 +254,15 @@ public class TemporalMemory {
             boolean isLearningSegment = learningSegments.contains(dd);
             boolean isFromWinnerCell = winnerCells.contains(dd.getParentCell());
             
-            Set<Synapse> activeSynapses = new LinkedHashSet<Synapse>(dd.getConnectedActiveSynapses(prevActiveSynapseSegments, 0));
+            Set<Synapse> activeSynapses = dd.getConnectedActiveSynapses(prevActiveSynapseSegments, 0);
             
             if(isLearningSegment || isFromWinnerCell) {
                 dd.adaptSegment(c, activeSynapses, permanenceIncrement, permanenceDecrement);
             }
             
-            int synapseCounter = c.getSynapseCount();  
-            if(isLearningSegment) {
-                int n = c.getMaxNewSynapseCount() - activeSynapses.size();
+            int synapseCounter = c.getSynapseCount(); 
+            int n = c.getMaxNewSynapseCount() - activeSynapses.size();
+            if(isLearningSegment && n > 0) {
                 Set<Cell> learnCells = dd.pickCellsToLearnOn(c, n, prevWinnerCells, c.getRandom());
                 for(Cell sourceCell : learnCells) {
                     dd.createSynapse(c, sourceCell, c.getInitialPermanence(), synapseCounter);

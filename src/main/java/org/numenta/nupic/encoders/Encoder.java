@@ -29,21 +29,25 @@ import gnu.trove.list.array.TIntArrayList;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import org.numenta.nupic.FieldMetaType;
 import org.numenta.nupic.util.ArrayUtils;
 import org.numenta.nupic.util.MinMax;
 import org.numenta.nupic.util.SparseObjectMatrix;
 import org.numenta.nupic.util.Tuple;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * <pre>
  * An encoder takes a value and encodes it with a partial sparse representation
  * of bits.  The Encoder superclass implements:
- * - encode() - returns a numpy array encoding the input; syntactic sugar
+ * - encode() - returns an array encoding the input; syntactic sugar
  *   on top of encodeIntoArray. If pprint, prints the encoding to the terminal
  * - pprintHeader() -- prints a header describing the encoding to the terminal
  * - pprint() -- prints an encoding to the terminal
@@ -53,7 +57,7 @@ import org.numenta.nupic.util.Tuple;
  *                                      [`nupic.data.fieldmeta.FieldMetaType.XXXXX`]
  *                                      (e.g., [nupic.data.fieldmetaFieldMetaType.float])
  * - getWidth()                     --  returns the output width, in bits
- * - encodeIntoArray()              --  encodes input and puts the encoded value into the numpy output array,
+ * - encodeIntoArray()              --  encodes input and puts the encoded value into the output array,
  *                                      which is a 1-D array of length returned by getWidth()
  * - getDescription()               --  returns a list of (name, offset) pairs describing the
  *                                      encoded output
@@ -79,6 +83,9 @@ import org.numenta.nupic.util.Tuple;
  * @author David Ray
  */
 public abstract class Encoder<T> {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(Encoder.class);
+
 	/** Value used to represent no data */
 	public static final double SENTINEL_VALUE_FOR_MISSING_DATA = Double.NaN;
     protected List<Tuple> description = new ArrayList<>();
@@ -114,14 +121,13 @@ public abstract class Encoder<T> {
     /** if true, skip some safety checks (for compatibility reasons), default false */
     protected boolean forced;
     /** Encoder name - an optional string which will become part of the description */
-    protected String name;
+    protected String name = "";
     protected int padding;
     protected int nInternal;
     protected double rangeInternal;
     protected double range;
-    protected int verbosity;
     protected boolean encLearningEnabled;
-    protected List<FieldMetaType> flattenedFieldTypeList;
+    protected Set<FieldMetaType> flattenedFieldTypeList;
     protected Map<Tuple, List<FieldMetaType>> decoderFieldTypes;
     /**
      * This matrix is used for the topDownCompute. We build it the first time
@@ -423,22 +429,6 @@ public abstract class Encoder<T> {
     }
 
     /**
-     * Sets the verbosity of debug output
-     * @param v
-     */
-    public void setVerbosity(int v) {
-    	this.verbosity = v;
-    }
-
-    /**
-     * Returns the verbosity setting for an encoder.
-     * @return
-     */
-    public int getVerbosity() {
-    	return verbosity;
-    }
-
-    /**
      * Adds a the specified {@link Encoder} to the list of the specified
      * parent's {@code Encoder}s.
      *
@@ -454,6 +444,11 @@ public abstract class Encoder<T> {
     	}
 
     	EncoderTuple key = getEncoderTuple(parent);
+    	// Insert a new Tuple for the parent if not yet added.
+    	if(key == null) {
+    	    encoders.put(key = new EncoderTuple("", this, 0), new ArrayList<EncoderTuple>());
+    	}
+    	
     	List<EncoderTuple> childEncoders = null;
     	if((childEncoders = encoders.get(key)) == null) {
     		encoders.put(key, childEncoders = new ArrayList<EncoderTuple>());
@@ -542,7 +537,7 @@ public abstract class Encoder<T> {
      *
      * @return	List<FieldMetaType>
      */
-    public List<FieldMetaType> getFlattenedFieldTypeList() {
+    public Set<FieldMetaType> getFlattenedFieldTypeList() {
     	return flattenedFieldTypeList;
     }
 
@@ -551,7 +546,7 @@ public abstract class Encoder<T> {
      *
      * @param l		list of {@link FieldMetaType}s
      */
-    public void setFlattenedFieldTypeList(List<FieldMetaType> l) {
+    public void setFlattenedFieldTypeList(Set<FieldMetaType> l) {
     	this.flattenedFieldTypeList = l;
     }
 
@@ -586,7 +581,7 @@ public abstract class Encoder<T> {
 	public abstract boolean isDelta();
 
 	/**
-	 * Encodes inputData and puts the encoded value into the numpy output array,
+	 * Encodes inputData and puts the encoded value into the output array,
      * which is a 1-D array of length returned by {@link #getW()}.
 	 *
      * Note: The output array is reused, so clear it before updating it.
@@ -670,14 +665,14 @@ public abstract class Encoder<T> {
 	 * @return
 	 */
 	@SuppressWarnings("unchecked")
-	public List<FieldMetaType> getDecoderOutputFieldTypes() {
+	public Set<FieldMetaType> getDecoderOutputFieldTypes() {
 		if(getFlattenedFieldTypeList() != null) {
-			return getFlattenedFieldTypeList();
+			return new HashSet<>(getFlattenedFieldTypeList());
 		}
 
-		List<FieldMetaType> retVal = new ArrayList<FieldMetaType>();
+		Set<FieldMetaType> retVal = new HashSet<FieldMetaType>();
 		for(Tuple t : getEncoders(this)) {
-			List<FieldMetaType> subTypes = ((Encoder<T>)t.get(1)).getDecoderOutputFieldTypes();
+			Set<FieldMetaType> subTypes = ((Encoder<T>)t.get(1)).getDecoderOutputFieldTypes();
 			retVal.addAll(subTypes);
 		}
 		setFlattenedFieldTypeList(retVal);
@@ -704,36 +699,17 @@ public abstract class Encoder<T> {
 	}
 
 	/**
-	 * Returns a reference to each sub-encoder in this encoder. They are
-     * returned in the same order as they are for getScalarNames() and
-     * getScalars()
-     *
-	 * @return
-	 */
-	@SuppressWarnings("unchecked")
-	public List<Encoder<T>> getEncoderList() {
-		List<Encoder<T>> encoders = new ArrayList<Encoder<T>>();
-
-		List<EncoderTuple> registeredList = getEncoders(this);
-		if(registeredList != null && !registeredList.isEmpty()) {
-			for(Tuple t : registeredList) {
-				List<Encoder<T>> subEncoders = ((Encoder<T>)t.get(1)).getEncoderList();
-				encoders.addAll(subEncoders);
-			}
-		}else{
-			encoders.add(this);
-		}
-		return encoders;
-	}
-
-	/**
 	 * Returns an {@link TDoubleList} containing the sub-field scalar value(s) for
      * each sub-field of the inputData. To get the associated field names for each of
      * the scalar values, call getScalarNames().
 	 *
      * For a simple scalar encoder, the scalar value is simply the input unmodified.
      * For category encoders, it is the scalar representing the category string
-     * that is passed in. For the datetime encoder, the scalar value is the
+     * that is passed in.
+     *
+     * TODO This is not correct for DateEncoder:
+     *
+     * For the datetime encoder, the scalar value is the
      * the number of seconds since epoch.
 	 *
      * The intent of the scalar representation of a sub-field is to provide a
@@ -907,7 +883,7 @@ public abstract class Encoder<T> {
 			throw new IllegalStateException("Bit is outside of allowable range: " +
 				String.format("[0 - %d]", width));
 		}
-		return new Tuple(2, prevFieldName, bitOffset - prevFieldOffset);
+		return new Tuple(prevFieldName, bitOffset - prevFieldOffset);
 	}
 
 	/**
@@ -916,10 +892,10 @@ public abstract class Encoder<T> {
 	 * @param prefix
 	 */
 	public void pprintHeader(String prefix) {
-		System.out.println(prefix == null ? "" : prefix);
+		LOGGER.info(prefix == null ? "" : prefix);
 
 		List<Tuple> description = getDescription();
-		description.add(new Tuple(2, "end", getWidth()));
+		description.add(new Tuple("end", getWidth()));
 
 		int len = description.size() - 1;
 		for(int i = 0;i < len;i++) {
@@ -930,42 +906,42 @@ public abstract class Encoder<T> {
 			StringBuilder pname = new StringBuilder(name);
 			if(name.length() > width) pname.setLength(width);
 
-			System.out.println(String.format(formatStr, pname));
+            LOGGER.info(String.format(formatStr, pname));
 		}
 
 		len = getWidth() + (description.size() - 1)*3 - 1;
 		StringBuilder hyphens = new StringBuilder();
 		for(int i = 0;i < len;i++) hyphens.append("-");
-		System.out.println(new StringBuilder(prefix).append(hyphens));
-	}
+        LOGGER.info(new StringBuilder(prefix).append(hyphens).toString());
+    }
 
-	/**
+    /**
 	 * Pretty-print the encoded output using ascii art.
 	 * @param output
 	 * @param prefix
 	 */
 	public void pprint(int[] output, String prefix) {
-		System.out.println(prefix == null ? "" : prefix);
+		LOGGER.info(prefix == null ? "" : prefix);
 
 		List<Tuple> description = getDescription();
-		description.add(new Tuple(2, "end", getWidth()));
+		description.add(new Tuple("end", getWidth()));
 
 		int len = description.size() - 1;
 		for(int i = 0;i < len;i++) {
 			int offset = (int)description.get(i).get(1);
 			int nextOffset = (int)description.get(i + 1).get(1);
 
-			System.out.println(
-				String.format("%s |",
-					ArrayUtils.bitsToString(
-						ArrayUtils.sub(output, ArrayUtils.range(offset, nextOffset))
-					)
-				)
-			);
-		}
-	}
+            LOGGER.info(
+                    String.format("%s |",
+                            ArrayUtils.bitsToString(
+                                    ArrayUtils.sub(output, ArrayUtils.range(offset, nextOffset))
+                            )
+                    )
+            );
+        }
+    }
 
-	/**
+    /**
 	 * Takes an encoded output and does its best to work backwards and generate
      * the input that would have generated it.
 	 *
@@ -1052,7 +1028,7 @@ public abstract class Encoder<T> {
 			fieldsOrder.addAll((List<String>)result.get(1));
 		}
 
-		return new Tuple(2, fieldsMap, fieldsOrder);
+		return new Tuple(fieldsMap, fieldsOrder);
 	}
 
 	/**
@@ -1154,7 +1130,7 @@ public abstract class Encoder<T> {
      *                          always an int or float, and can be used for
      *                          numeric comparisons.
 	 *
-     *        -# encoding       This is the encoded bit-array (numpy array)
+     *        -# encoding       This is the encoded bit-array
      *                          that represents the best-guess value.
      *                          That is, if 'value' was passed to
      *                          encode(), an identical bit-array should be
@@ -1201,7 +1177,7 @@ public abstract class Encoder<T> {
 					denom = 1.0;
 				}
 
-				closeness = 1.0 - (double)err/denom;
+				closeness = 1.0 - err/denom;
 				if(closeness < 0) {
 					closeness = 0;
 				}
@@ -1236,7 +1212,7 @@ public abstract class Encoder<T> {
     public int[] rightVecProd(SparseObjectMatrix<int[]> matrix, int[] encoded) {
     	int[] retVal = new int[matrix.getMaxIndex() + 1];
     	for(int i = 0;i < retVal.length;i++) {
-    		int[] slice = (int[])matrix.getObject(i);
+    		int[] slice = matrix.getObject(i);
     		for(int j = 0;j < slice.length;j++) {
     			retVal[i] += (slice[j] * encoded[j]);
     		}
@@ -1261,7 +1237,6 @@ public abstract class Encoder<T> {
 	public static abstract class Builder<K, E> {
 		protected int n;
 		protected int w;
-		protected int encVerbosity;
 		protected double minVal;
 		protected double maxVal;
 		protected double radius;
@@ -1280,7 +1255,6 @@ public abstract class Encoder<T> {
 			}
 			encoder.setN(n);
 			encoder.setW(w);
-			encoder.setVerbosity(encVerbosity);
 			encoder.setMinVal(minVal);
 			encoder.setMaxVal(maxVal);
 			encoder.setRadius(radius);
@@ -1299,10 +1273,6 @@ public abstract class Encoder<T> {
 		}
 		public K w(int w) {
 			this.w = w;
-			return (K)this;
-		}
-		public K verbosity(int verbosity) {
-			this.encVerbosity = verbosity;
 			return (K)this;
 		}
 		public K minVal(double minVal) {

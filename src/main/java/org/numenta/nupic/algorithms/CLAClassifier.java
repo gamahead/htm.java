@@ -142,7 +142,7 @@ public class CLAClassifier {
 		this.actValueAlpha = actValueAlpha;
 		this.verbosity = verbosity;
 		actualValues.add(null);
-		patternNZHistory = new Deque<Tuple>(steps.size() + 1);
+		patternNZHistory = new Deque<Tuple>(ArrayUtils.max(steps.toArray()) + 1);
 	}
 	
 	/**
@@ -163,7 +163,7 @@ public class CLAClassifier {
 	 * @param infer				if true, perform inference
 	 * 
 	 * @return					dict containing inference results, there is one entry for each
-     *           				step in self.steps, where the key is the number of steps, and
+     *           				step in steps, where the key is the number of steps, and
      *           				the value is an array containing the relative likelihood for
      *           				each bucketIdx starting from bucketIdx 0.
 	 *
@@ -199,8 +199,7 @@ public class CLAClassifier {
 			System.out.println(" classificationIn: " + classification);
 		}
 		
-		patternNZHistory.append(new Tuple(2, learnIteration, patternNZ));
-		System.out.println("deque size = " + learnIteration + "  " + patternNZHistory);
+		patternNZHistory.append(new Tuple(learnIteration, patternNZ));
 		
 		//------------------------------------------------------------------------
 	    // Inference:
@@ -234,7 +233,7 @@ public class CLAClassifier {
 				double[] bitVotes = new double[maxBucketIdx + 1];
 				
 				for(int bit : patternNZ) {
-					Tuple key = new Tuple(2, bit, nSteps);
+					Tuple key = new Tuple(bit, nSteps);
 					BitHistory history = activeBitHistory.get(key);
 					if(history == null) continue;
 					
@@ -252,8 +251,7 @@ public class CLAClassifier {
 			        // buckets equally likely. There is no actual prediction for this
 			        // timestep so any of the possible predictions are just as good.
 					if(sumVotes.length > 0) {
-						Arrays.fill(sumVotes, 1);
-						sumVotes = ArrayUtils.divide(sumVotes, sumVotes.length);
+						Arrays.fill(sumVotes, 1.0 / (double)sumVotes.length);
 					}
 				}
 				
@@ -293,7 +291,7 @@ public class CLAClassifier {
 			}
 			
 			// Train each pattern that we have in our history that aligns with the
-		    // steps we have in self.steps
+		    // steps we have in steps
 			int nSteps = -1;
 			int iteration = 0;
 			int[] learnPatternNZ = null;
@@ -317,7 +315,7 @@ public class CLAClassifier {
 		        // that we got nSteps time steps ago.
 				for(int bit : learnPatternNZ) {
 					// Get the history structure for this bit and step
-					Tuple key = new Tuple(2, bit, nSteps);
+					Tuple key = new Tuple(bit, nSteps);
 					BitHistory history = activeBitHistory.get(key);
 					if(history == null) {
 						activeBitHistory.put(key, history = new BitHistory(this, bit, nSteps));
@@ -332,8 +330,11 @@ public class CLAClassifier {
 			System.out.println("   actual bucket values: " + Arrays.toString((T[])retVal.getActualValues()));
 			
 			for(int key : retVal.stepSet()) {
-				System.out.println(String.format("  %d steps: ", key, pFormatArray((double[])retVal.getActualValue(key))));
-				int bestBucketIdx = ArrayUtils.argmax((double[])retVal.getActualValue(key));
+				if(retVal.getActualValue(key) == null) continue;
+				
+				Object[] actual = new Object[] { (T)retVal.getActualValue(key) };
+				System.out.println(String.format("  %d steps: ", key, pFormatArray(actual)));
+				int bestBucketIdx = retVal.getMostProbableBucketIndex(key);
 				System.out.println(String.format("   most likely bucket idx: %d, value: %s ", bestBucketIdx, 
 					retVal.getActualValue(bestBucketIdx)));
 				
@@ -350,10 +351,12 @@ public class CLAClassifier {
 	 * @param arr
 	 * @return
 	 */
-	private String pFormatArray(double[] arr) {
+	private <T> String pFormatArray(T[] arr) {
+		if(arr == null) return "";
+		
 		StringBuilder sb = new StringBuilder("[ ");
-		for(double d : arr) {
-			sb.append(String.format("%.2f", d));
+		for(T t : arr) {
+			sb.append(String.format("%.2s", t));
 		}
 		sb.append(" ]");
 		return sb.toString();

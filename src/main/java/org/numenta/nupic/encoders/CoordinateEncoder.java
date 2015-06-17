@@ -42,8 +42,8 @@ public class CoordinateEncoder extends Encoder<Tuple> implements CoordinateOrder
         /*
         *description has a {@link List} of {@link Tuple}s containing
         */
-        Tuple desc = new Tuple(2, "coordinate", 0);
-        Tuple desc2 = new Tuple(2, "radius", 1);
+        Tuple desc = new Tuple("coordinate", 0);
+        Tuple desc2 = new Tuple("radius", 1);
         description.add(desc);
         description.add(desc2);
     }
@@ -138,6 +138,7 @@ public class CoordinateEncoder extends Encoder<Tuple> implements CoordinateOrder
 	 * @return	A value in the interval [0, 1), representing the
      *          order of the coordinate
 	 */
+	@Override
 	public double orderForCoordinate(int[] coordinate) {
 		random.setSeed(coordinate);
 		return random.nextDouble();
