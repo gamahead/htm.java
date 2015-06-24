@@ -1,5 +1,7 @@
 package gamahead.sandbox;
 
+import java.util.Arrays;
+
 import org.numenta.nupic.Parameters;
 import org.numenta.nupic.Parameters.*;
 import org.numenta.nupic.network.*;
@@ -11,44 +13,39 @@ import org.numenta.nupic.network.sensor.SensorParams.Keys;
 import org.numenta.nupic.research.*;
 
 import rx.Observable;
+import rx.Observer;
 import rx.Subscriber;
+import rx.functions.Action1;
 
 public class NumberNetwork {
 
 	public static void main(String[] args) {
 		
-		Parameters p = NetworkDemoHarness.getParameters();
-		p = p.union(NetworkDemoHarness.getNetworkDemoTestEncoderParams());
-
+		Parameters p = Parameters.getAllDefaultParameters();
+		
 		Network network = Network.create("Network API Demo", p)
 		    .add(Network.createRegion("Region 1")
 		        .add(Network.createLayer("Layer 2/3", p)
-		            .alterParameter(KEY.AUTO_CLASSIFY, Boolean.TRUE)
-		            .add(Anomaly.create())
 		            .add(new TemporalMemory())
-		            .add(new SpatialPooler())
-		            .add(Sensor.create(ObservableSensor::create, SensorParams.create(
-		                Keys::path, "", ResourceLocator.path("1.csv"))))));
-
+		            .add(new SpatialPooler())));
+//		            .add(Sensor.create(FileSensor::create, SensorParams.create(
+//	                        Keys::path, "", ResourceLocator.path("rec-center-hourly.csv"))))));
 		network.start();
-		
-		Observable<Inference> o = network.observe(); // This Observable can be used a million different ways!
-		o.subscribe(new Subscriber<Inference>() {
-		    @Override 
-		    public void onCompleted() {
-		        // Do finalization work here if desired
-		    }
 
-		    @Override 
-		    public void onError(Throwable e) {
-		        // Error handling here
-		    }
-
-		    @Override public void onNext(Inference i) {
-		        System.out.println("\n\nHere's another iteration baby\n\n");
-		    }
-		});
-
+		System.out.println("RIGHT 1");
+        System.out.println("RIGHT 2");
+        System.out.println("RIGHT 3");
+        System.out.println("RIGHT 4");
 	}
+	
+	public static void hello(String... names) {
+	    Observable.from(names).subscribe(new Action1<String>() {
 
+	        @Override
+	        public void call(String s) {
+	            System.out.println("Hello " + s + "!");
+	        }
+
+	    });
+	}
 }
