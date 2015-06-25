@@ -51,7 +51,7 @@ public class NumberNetwork {
 	        	System.out.println(Arrays.toString(s.getEncoding()));
 	            System.out.println("Hello " + Arrays.toString(s.getPredictedColumns()) + "!");
 	            System.out.println("yoyo " + Arrays.toString(s.getSDR()) + "!");
-	            printNum(s.getSDR(), 28, "*", "-");
+//	            printNum(s.getSDR(), 28, "*", "-");
 //	            network.compute(new int[] {r.nextInt(2),r.nextInt(2),r.nextInt(2),r.nextInt(2),r.nextInt(2),r.nextInt(2),r.nextInt(2),r.nextInt(2),r.nextInt(2)});
 	        }
 
