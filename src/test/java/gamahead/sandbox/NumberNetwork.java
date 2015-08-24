@@ -30,14 +30,12 @@ public class NumberNetwork {
 		Parameters p = Parameters.getAllDefaultParameters();
 //		p.setParameterByKey(KEY.ENCODER, "PassThroughEncoder");
 		p.setParameterByKey(KEY.INPUT_DIMENSIONS, new int[] {884});
-		p.setParameterByKey(KEY.TM_VERBOSITY, 9);
 //		p.setParameterByKey(KEY.N, 9);
 //		p.setParameterByKey(KEY.W, 9);
 				
 		Network network = Network.create("Network API Demo", p)
 		    .add(Network.createRegion("Region 1")
 		        .add(Network.createLayer("Layer 2/3", p)
-		
 		            .add(new TemporalMemory())
 		            .add(new SpatialPooler())));
 //		            .add(Sensor.create(FileSensor::create, SensorParams.create(
@@ -56,6 +54,7 @@ public class NumberNetwork {
 	        }
 
 		});
+		
 		try {
 			Files.lines(new File("/Users/joshuarose/Desktop/htm.java/src/main/java/org/numenta/nupic/datagen/1.csv").toPath()).forEach(l -> {
 				System.out.println("line = " + l);

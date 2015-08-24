@@ -746,7 +746,7 @@ public class Layer<T> {
         if(!dispatchCompleted()) {
             completeDispatch(t);
         }
-        
+        System.out.println("DID WE GET HERE?");
         publisher.onNext(t);
     }
     
