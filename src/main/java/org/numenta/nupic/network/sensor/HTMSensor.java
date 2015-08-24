@@ -5,15 +5,15 @@
  * following terms and conditions apply:
  *
  * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 3 as
+ * it under the terms of the GNU Affero Public License version 3 as
  * published by the Free Software Foundation.
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
- * See the GNU General Public License for more details.
+ * See the GNU Affero Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
+ * You should have received a copy of the GNU Affero Public License
  * along with this program.  If not, see http://www.gnu.org/licenses.
  *
  * http://numenta.org/licenses/
@@ -146,49 +146,46 @@ public class HTMSensor<T> implements Sensor<T> {
      * which services the encoding of the field occurring in that position. This
      * sequence of types is contained by an instance of {@link Header} which
      * makes available an array of {@link FieldMetaType}s.
-     *    
      */
     private void makeIndexEncoderMap() {
         indexToEncoderMap = new TIntObjectHashMap<Encoder<?>>();
         
-        final FieldMetaType[] fieldTypes = header.getFieldTypes().toArray(new FieldMetaType[header.getFieldTypes().size()]);
-        
-        for(int i = 0;i < fieldTypes.length;i++) {
-            switch(fieldTypes[i]) {
+        for (int i = 0, size = header.getFieldNames().size(); i < size; i++) {
+            switch (header.getFieldTypes().get(i)) {
                 case DATETIME:
                     Optional<DateEncoder> de = getDateEncoder(encoder);
-                    if(de.isPresent()) {
+                    if (de.isPresent()) {
                         indexToEncoderMap.put(i, de.get());
-                    }else{
-                        throw new IllegalArgumentException("DateEncoder never initialized.");
+                    } else {
+                        throw new IllegalArgumentException("DateEncoder never initialized: " + header.getFieldNames().get(i));
                     }
                     break;
                 case BOOLEAN:
                 case FLOAT:
                 case INTEGER:
-                    Optional<Encoder<?>> opt = getNumberEncoder(encoder);
-                    if(opt.isPresent()) {
-                        indexToEncoderMap.put(i, opt.get());
-                    }else{
-                        throw new IllegalArgumentException("Number (Boolean also) encoder never initialized.");
+                    Optional<Encoder<?>> ne = getNumberEncoder(encoder);
+                    if (ne.isPresent()) {
+                        indexToEncoderMap.put(i, ne.get());
+                    } else {
+                        throw new IllegalArgumentException("Number (or Boolean) encoder never initialized: " + header.getFieldNames().get(i));
                     }
                     break;
                 case LIST:
                 case STRING:
-                    opt = getCategoryEncoder(encoder);
-                    if(opt.isPresent()) {
-                        indexToEncoderMap.put(i, opt.get());
-                    }else{
-                        throw new IllegalArgumentException("Category encoder never initialized.");
+                    Optional<Encoder<?>> ce = getCategoryEncoder(encoder);
+                    if (ce.isPresent()) {
+                        indexToEncoderMap.put(i, ce.get());
+                    } else {
+                        throw new IllegalArgumentException("Category encoder never initialized: " + header.getFieldNames().get(i));
                     }
                     break;
                 case COORD:
                 case GEO:
-                    opt = getCoordinateEncoder(encoder);
-                    if(opt.isPresent()) {
-                        indexToEncoderMap.put(i, opt.get());
-                    }else{
-                        throw new IllegalArgumentException("Coordinate encoder never initialized.");
+                    Optional<Encoder<?>> ge = getCoordinateEncoder(encoder);
+                    if (ge.isPresent()) {
+                        indexToEncoderMap.put(i, ge.get());
+                    } else {
+                        throw new IllegalArgumentException("Coordinate encoder never initialized: " + header.getFieldNames().get(i));
                     }
                     break;
                 default:
@@ -432,7 +429,7 @@ public class HTMSensor<T> implements Sensor<T> {
             }
         }
         
-        return null;
+        return Optional.empty();
     }
     
     /**
@@ -451,7 +448,7 @@ public class HTMSensor<T> implements Sensor<T> {
             }
         }
         
-        return null;
+        return Optional.empty();
     }
     
     /**
@@ -468,7 +465,7 @@ public class HTMSensor<T> implements Sensor<T> {
            }
        }
        
-       return Optional.of(null);
+       return Optional.empty();
     }
     
     /**
@@ -492,7 +489,7 @@ public class HTMSensor<T> implements Sensor<T> {
             }
         }
         
-        return Optional.of(null);
+        return Optional.empty();
      }
     
     /**
@@ -733,12 +730,4 @@ public class HTMSensor<T> implements Sensor<T> {
         return (MultiEncoder)encoder;
     }
     
-    public static void main(String[] args) {
-        ArrayList<String> ll = new ArrayList<>(5);
-        ll.set(padTo(0, ll), "My");
-        ll.set(padTo(2, ll), "array");
-        ll.set(padTo(1, ll), "ordered");
-        
-        System.out.println(ll + ", size = " + ll.size());
-    }
 }
